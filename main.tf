@@ -127,7 +127,7 @@ resource "aws_autoscaling_group" "asg-sample" {
   launch_configuration = aws_launch_configuration.asg-lc.id
   availability_zones   = data.aws_availability_zones.all.names
   min_size = 1
-  max_size = 1
+  max_size = 2
 
   load_balancers    = [aws_elb.sample.name]
   health_check_type = "ELB"
@@ -145,3 +145,4 @@ output "elb_dns_name" {
   value       = aws_elb.sample.dns_name
   description = "The domain name of the load balancer"
 }
+
