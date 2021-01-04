@@ -52,6 +52,7 @@ tags = {
 }
 
 resource "aws_instance" "example" {
+count=2
 ami = "ami-03c3a7e4263fd998c"
 instance_type = "t2.micro"
 key_name = aws_key_pair.terraform.key_name
