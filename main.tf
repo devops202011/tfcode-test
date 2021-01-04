@@ -32,12 +32,15 @@ cidr_blocks=["0.0.0.0/0"]
 }
 
 
+
 ingress {
 from_port=80
 to_port=80
 protocol="tcp"  
-cidr_blocks=["0.0.0.0/0"]
+#cidr_blocks=[aws_security_group.elb-sg.arn]
+security_groups=[aws_security_group.elb-sg.arn]
 }
+
 
 egress {
     from_port   = 0
@@ -51,41 +54,94 @@ tags = {
   }
 }
 
-resource "aws_instance" "example" {
-count=2
-ami = "ami-03c3a7e4263fd998c"
-instance_type = "t2.micro"
-key_name = aws_key_pair.terraform.key_name
-vpc_security_group_ids=[aws_security_group.allow_sg.id]
 
-#   ebs_block_device {
-#   delete_on_termination = true
-#   device_name = "/dev/sdg"
-#   encrypted = false
-#   volume_size = 13
-#    }
-    root_block_device {
-      volume_size = 10
-      encrypted = false
+resource "aws_security_group" "elb-sg" {
+  name = "terraform-sample-elb-sg"
+  # Allow all outbound
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  # Inbound HTTP from anywhere
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
 
-    }
-	
-	
-	user_data = <<EOF
-  #!/bin/bash
-  export JAVA_HOME="/usr/lib/jvm/jre"
-  yum update -y
-  #yum install tomcat9 tomcat9-webapps java-1.8.0-openjdk java-1.8.0-openjdk-devel java-1.8.0-openjdk-javadoc mariadb-server -y
-  yum install httpd -y
-  systemctl start httpd
-  systemctl status httpd
-  curl localhost
-  eof
 
-  EOF
+
+
+data "aws_availability_zones" "all" {}
+
+resource "aws_launch_configuration" "asg-lc" {
+  key_name = aws_key_pair.terraform.key_name
+  image_id          = "ami-03c3a7e4263fd998c"
+  instance_type = "t2.micro"
+  security_groups = [aws_security_group.allow_sg.id]
   
-  
-tags ={ Name = "TF-Ec2"
-        Environment= "Dev"
-		}
+  user_data = <<-EOF
+              #!/bin/bash
+              yum install -y httpd
+              systemctl start  httpd
+              systemctl status httpd
+              nohup busybox httpd -f -p 80 &
+              EOF
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+
+
+resource "aws_elb" "sample" {
+  name               = "terraform-asg-sample"
+  security_groups    = [aws_security_group.elb-sg.id]
+  availability_zones = data.aws_availability_zones.all.names
+
+  health_check {
+    target              = "TCP:80"
+    interval            = 30
+    timeout             = 3
+    healthy_threshold   = 2
+    unhealthy_threshold = 10
+  }
+
+  # Adding a listener for incoming HTTP requests.
+  listener {
+    lb_port           = 80
+    lb_protocol       = "http"
+    instance_port     = 80
+    instance_protocol = "http"
+  }
+}
+
+
+
+
+resource "aws_autoscaling_group" "asg-sample" {
+  launch_configuration = aws_launch_configuration.asg-lc.id
+  availability_zones   = data.aws_availability_zones.all.names
+  min_size = 1
+  max_size = 1
+
+  load_balancers    = [aws_elb.sample.name]
+  health_check_type = "ELB"
+
+  tag {
+    key                 = "Name"
+    value               = "terraform-asg-sample"
+    propagate_at_launch = true
+  }
+}
+
+
+
+output "elb_dns_name" {
+  value       = aws_elb.sample.dns_name
+  description = "The domain name of the load balancer"
 }
