@@ -4,3 +4,4 @@
 *.tfstate
 *.backup
 tf_ec2_key
+*.ppk
