@@ -32,6 +32,13 @@ cidr_blocks=["0.0.0.0/0"]
 }
 
 
+ingress {
+from_port=80
+to_port=80
+protocol="tcp"  
+cidr_blocks=["0.0.0.0/0"]
+}
+
 egress {
     from_port   = 0
     to_port     = 0
@@ -49,6 +56,34 @@ ami = "ami-03c3a7e4263fd998c"
 instance_type = "t2.micro"
 key_name = aws_key_pair.terraform.key_name
 vpc_security_group_ids=[aws_security_group.allow_sg.id]
+
+#   ebs_block_device {
+#   delete_on_termination = true
+#   device_name = "/dev/sdg"
+#   encrypted = false
+#   volume_size = 13
+#    }
+    root_block_device {
+      volume_size = 10
+      encrypted = false
+
+    }
+	
+	
+	user_data = <<EOF
+  #!/bin/bash
+  export JAVA_HOME="/usr/lib/jvm/jre"
+  yum update -y
+  #yum install tomcat9 tomcat9-webapps java-1.8.0-openjdk java-1.8.0-openjdk-devel java-1.8.0-openjdk-javadoc mariadb-server -y
+  yum install httpd -y
+  systemctl start httpd
+  systemctl status httpd
+  curl localhost
+  eof
+
+  EOF
+  
+  
 tags ={ Name = "TF-Ec2"
         Environment= "Dev"
 		}
